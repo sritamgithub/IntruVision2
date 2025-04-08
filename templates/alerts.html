@@ -1,0 +1,155 @@
+{% extends "layout.html" %}
+
+{% block title %}Alert History{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-bell"></i> Alert History</h2>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="fas fa-history"></i> Unknown Face Detections</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-striped mb-0">
+                <thead>
+                    <tr>
+                        <th>Date/Time</th>
+                        <th>Status</th>
+                        <th>Alert Sent</th>
+                        <th>Image</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for alert in alerts %}
+                        <tr>
+                            <td>{{ alert.timestamp }}</td>
+                            <td>
+                                <span class="badge bg-danger">Unknown</span>
+                            </td>
+                            <td>
+                                {% if alert.alert_status %}
+                                    {% if 'failed' in alert.alert_status %}
+                                        <span class="badge bg-warning text-dark">
+                                            <i class="fas fa-exclamation-triangle"></i> Failed
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-success">
+                                            <i class="fas fa-check"></i> Sent
+                                        </span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="badge bg-secondary">N/A</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if alert.image_path %}
+                                    <button type="button" class="btn btn-sm btn-info" data-bs-toggle="modal" data-bs-target="#imageModal{{ alert.id }}">
+                                        <i class="fas fa-image"></i> View
+                                    </button>
+                                    
+                                    <!-- Image Modal -->
+                                    <div class="modal fade" id="imageModal{{ alert.id }}" tabindex="-1" aria-hidden="true">
+                                        <div class="modal-dialog">
+                                            <div class="modal-content">
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title">Unknown Face</h5>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                </div>
+                                                <div class="modal-body text-center">
+                                                    <img src="{{ url_for('static', filename=alert.image_path.replace('static/', '')) }}" 
+                                                         class="img-fluid rounded" alt="Unknown Face">
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                                                    <form action="#" method="post" id="add-person-form-{{ alert.id }}" class="d-inline">
+                                                        <button type="button" class="btn btn-primary" onclick="showAddPersonModal('{{ alert.id }}', '{{ alert.image_path }}')">
+                                                            <i class="fas fa-user-plus"></i> Add as Person
+                                                        </button>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% else %}
+                                    <span class="badge bg-secondary">No Image</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="4" class="text-center py-3">No unknown face detections recorded</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Add Person Modal -->
+<div class="modal fade" id="addPersonModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">Add New Person</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('add_user') }}" method="post" id="new-person-form">
+                <div class="modal-body">
+                    <input type="hidden" id="unknown_image_path" name="unknown_image_path">
+                    
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Full Name*</label>
+                        <input type="text" class="form-control" id="name" name="name" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="gender" class="form-label">Gender</label>
+                        <select class="form-select" id="gender" name="gender">
+                            <option value="">Select Gender</option>
+                            <option value="Male">Male</option>
+                            <option value="Female">Female</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="email" name="email">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="mobile" class="form-label">Mobile</label>
+                        <input type="tel" class="form-control" id="mobile" name="mobile">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Person</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Function to show add person modal
+    function showAddPersonModal(alertId, imagePath) {
+        // Set the unknown image path in the form
+        document.getElementById('unknown_image_path').value = imagePath;
+        
+        // Show the modal
+        const addPersonModal = new bootstrap.Modal(document.getElementById('addPersonModal'));
+        addPersonModal.show();
+        
+        // Close the image modal
+        const imageModal = bootstrap.Modal.getInstance(document.getElementById('imageModal' + alertId));
+        imageModal.hide();
+    }
+</script>
+{% endblock %}

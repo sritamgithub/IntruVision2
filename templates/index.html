@@ -1,0 +1,1355 @@
+{% extends "layout.html" %}
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<!-- Main header with quick stats -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card bg-primary text-white shadow-sm">
+            <div class="card-body py-3">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <h4 class="mb-0"><i class="fas fa-shield-alt"></i> IntruVision</h4>
+                        <p class="mb-0 opacity-75">Secure monitoring and access control</p>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="row text-center">
+                            <div class="col-4">
+                                <div class="border-start border-white border-opacity-25 px-2">
+                                    <h5 class="mb-0">{{ persons|length }}</h5>
+                                    <small>Users</small>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="border-start border-white border-opacity-25 px-2">
+                                    <h5 class="mb-0">{{ active_guests|length }}</h5>
+                                    <small>Guests</small>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="border-start border-white border-opacity-25 px-2">
+                                    <h5 class="mb-0" id="detection-count">{{ recent_detections|length }}</h5>
+                                    <small>Detections</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-7">
+        <div class="card shadow-sm mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center bg-dark text-white">
+                <h5 class="mb-0"><i class="fas fa-video"></i> Live Camera Feed</h5>
+                <div>
+                    <a href="#" class="btn btn-success btn-sm" id="start-camera-btn">
+                        <i class="fas fa-play"></i> Start Detection
+                    </a>
+                    <a href="#" class="btn btn-danger btn-sm d-none" id="stop-camera-btn">
+                        <i class="fas fa-stop"></i> Stop Detection
+                    </a>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="video-container position-relative">
+                    <div id="camera-container" class="position-relative d-none">
+                        <video id="webcam" autoplay muted playsinline style="display: none;"></video>
+                        <canvas id="face-canvas" class="w-100"></canvas>
+                        <div class="video-overlay d-flex justify-content-between align-items-center p-2">
+                            <span class="badge bg-dark opacity-75 p-2" id="fps-counter">FPS: --</span>
+                            <span class="badge bg-success"><i class="fas fa-circle"></i> Live</span>
+                        </div>
+                    </div>
+                    <div class="camera-placeholder d-flex justify-content-center align-items-center"
+                        id="camera-placeholder">
+                        <div class="text-center">
+                            <div class="mb-4">
+                                <i class="fas fa-camera-retro fa-5x text-secondary mb-3"></i>
+                                <div class="progress mt-3 mb-2" style="height: 5px;">
+                                    <div class="progress-bar bg-primary" id="model-load-progress" role="progressbar" style="width: 0%"></div>
+                                </div>
+                                <p class="text-muted" id="model-status">Face detection models: Loading...</p>
+                            </div>
+                            <h5 class="mb-3">Camera feed is not active</h5>
+                            <a href="#" class="btn btn-primary btn-lg" id="start-camera-btn-2">
+                                <i class="fas fa-play me-2"></i> Start Detection
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer bg-light d-none" id="detection-controls">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <span class="badge bg-secondary me-1" id="status-badge">Status: Inactive</span>
+                        <span class="badge bg-secondary me-1" id="recognition-badge">Recognition: Idle</span>
+                    </div>
+                    <div>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="show-boxes-toggle" checked>
+                            <label class="form-check-label" for="show-boxes-toggle">Show face boxes</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-5">
+        <!-- Recent Detections card moved to the right side -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-history"></i> Recent Detections</h5>
+                <button class="btn btn-sm btn-light refresh-btn" data-target="recent-detections">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive" id="recent-detections-container">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Person</th>
+                                <th>Status</th>
+                                <th>Time</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recent-detections-tbody">
+                            {% for detection in recent_detections %}
+                            <tr>
+                                <td>
+                                    {% if detection.name %}
+                                    <i class="fas fa-user-circle text-primary me-2"></i> {{ detection.name }}
+                                    {% else %}
+                                    <i class="fas fa-question-circle text-danger me-2"></i> <span class="text-danger">Unknown</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if detection.status == 'recognized' %}
+                                    <span class="badge bg-success">Recognized</span>
+                                    {% elif detection.status == 'guest' %}
+                                    <span class="badge bg-warning">Guest</span>
+                                    {% else %}
+                                    <span class="badge bg-danger">Unknown</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ detection.formatted_time }}</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="3" class="text-center py-3">No recent detections</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card-footer text-end">
+                <a href="{{ url_for('alerts') }}" class="btn btn-sm btn-outline-dark">View All</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <!-- Alert Report card moved here -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0"><i class="fas fa-bell"></i> Alert Report</h5>
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('generate_report') }}" method="post">
+                    <div class="mb-3">
+                        <label for="report_date" class="form-label">Select Date</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-calendar-alt"></i></span>
+                            <input type="date" class="form-control" id="report_date" name="report_date"
+                                value="{{ now.strftime('%Y-%m-%d') }}">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-danger w-100">
+                        <i class="fas fa-download me-2"></i> Download Alert Data
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <!-- Active Guests card moved here -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-user-clock"></i> Active Guests</h5>
+                <button class="btn btn-sm btn-light refresh-btn" data-target="active-guests">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive" id="active-guests-container">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Guest</th>
+                                <th>Valid Until</th>
+                                <th>Purpose</th>
+                            </tr>
+                        </thead>
+                        <tbody id="active-guests-tbody">
+                            {% for guest in active_guests %}
+                            <tr>
+                                <td>{{ guest.name }}</td>
+                                <td>{{ guest.end_date }}</td>
+                                <td>{{ guest.purpose or 'N/A' }}</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="3" class="text-center py-3">No active guests</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card-footer text-end">
+                <a href="{{ url_for('guests') }}" class="btn btn-sm btn-outline-dark">Manage Guests</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recognition results modal -->
+<div class="modal fade" id="recognitionModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Face Recognition</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="text-center">
+                    <div class="spinner-border text-primary mb-3" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p id="recognition-status">Processing your face...</p>
+                </div>
+                <div id="recognition-result" class="d-none">
+                    <div class="alert alert-success">
+                        <h5 id="recognition-name">Name: John Doe</h5>
+                        <p id="recognition-details">Status: Recognized</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading/Model Loading Modal -->
+<div class="modal fade" id="loadingModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1"
+    aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Loading Face Detection</h5>
+            </div>
+            <div class="modal-body text-center">
+                <div class="progress mb-3">
+                    <div id="loading-progress" class="progress-bar progress-bar-striped progress-bar-animated"
+                        role="progressbar" style="width: 0%"></div>
+                </div>
+                <p id="loading-message">Initializing face detection...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<!-- Camera Permission Modal -->
+<div class="modal fade" id="permissionModal" tabindex="-1" aria-labelledby="permissionModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title" id="permissionModalLabel">Camera Access Required</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="text-center mb-4">
+                    <i class="fas fa-camera-slash fa-4x text-warning mb-3"></i>
+                    <h5>Camera access is blocked</h5>
+                </div>
+                <p>To use face recognition, you need to allow camera access:</p>
+                <ol>
+                    <li>Click the camera or lock icon in your browser's address bar</li>
+                    <li>Select "Allow" for camera access</li>
+                    <li>Refresh the page after changing permission</li>
+                </ol>
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> Your camera will only be used for face recognition and is not recorded or stored.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="refreshPage()">Refresh Page</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .video-container {
+        aspect-ratio: 16/9;
+        background-color: #111;
+        overflow: hidden;
+        border-radius: 4px;
+    }
+
+    .camera-placeholder {
+        height: 400px;
+        background-color: #f8f9fa;
+        color: #6c757d;
+        border-radius: 4px;
+    }
+
+    .video-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        padding: 10px;
+        background-color: rgba(0, 0, 0, 0.2);
+    }
+
+    .badge i.fa-circle {
+        animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+        0% {
+            opacity: 0.5;
+        }
+
+        50% {
+            opacity: 1;
+        }
+
+        100% {
+            opacity: 0.5;
+        }
+    }
+
+    .refresh-btn {
+        transition: transform 0.3s ease;
+    }
+
+    .refresh-btn.rotating {
+        animation: rotating 2s linear infinite;
+    }
+
+    @keyframes rotating {
+        from {
+            transform: rotate(0deg);
+        }
+
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    /* Animation for new entries */
+    @keyframes highlight {
+        0% {
+            background-color: rgba(255, 193, 7, 0.2);
+        }
+
+        100% {
+            background-color: transparent;
+        }
+    }
+
+    .highlight-new {
+        animation: highlight 2s ease-out;
+    }
+
+    #face-canvas {
+        position: relative;
+        width: 100%;
+        height: auto;
+    }
+
+    .face-box {
+        position: absolute;
+        border: 2px solid rgba(0, 255, 0, 0.8);
+        border-radius: 2px;
+        background-color: rgba(0, 255, 0, 0.1);
+    }
+
+    .face-label {
+        position: absolute;
+        bottom: 0;
+        width: 100%;
+        background-color: rgba(0, 0, 0, 0.6);
+        color: white;
+        font-size: 12px;
+        padding: 2px 4px;
+        text-align: center;
+    }
+    
+    /* Card hover effects */
+    .card {
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 .5rem 1rem rgba(0,0,0,.15);
+    }
+    
+    /* Button hover effects */
+    .btn {
+        transition: all 0.3s;
+    }
+    
+    .btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,.12);
+    }
+    
+    /* Table row hover */
+    tbody tr {
+        transition: background-color 0.2s;
+    }
+    
+    /* Loading animation for model preloading */
+    @keyframes progress {
+        0% { width: 0%; }
+        100% { width: 100%; }
+    }
+    
+    #model-load-progress.loading {
+        animation: progress 30s linear forwards;
+    }
+</style>
+
+{% endblock %}
+
+
+{% block extra_js %}
+<!-- Include face-api.js -->
+<script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // Initialize variables
+        let isDetecting = false;
+        let recognitionInterval = {{ detection_interval or 5 }} * 1000; // milliseconds
+    let showBoxes = true;
+    let lastRecognitionTime = 0;
+    let faceDetectionReady = false;
+    let frameCount = 0;
+    let lastFpsUpdateTime = Date.now();
+    let video = document.getElementById('webcam');
+    let faceCanvas = document.getElementById('face-canvas');
+    let fpsCounter = document.getElementById('fps-counter');
+    let statusBadge = document.getElementById('status-badge');
+    let recognitionBadge = document.getElementById('recognition-badge');
+    let cameraPlaceholder = document.getElementById('camera-placeholder');
+    let cameraContainer = document.getElementById('camera-container');
+    let detectionControls = document.getElementById('detection-controls');
+    let loadingModal = document.getElementById('loadingModal') ?
+        new bootstrap.Modal(document.getElementById('loadingModal')) : null;
+    let recognitionModal = document.getElementById('recognitionModal') ?
+        new bootstrap.Modal(document.getElementById('recognitionModal')) : null;
+    let displaySize = { width: 640, height: 480 };
+    let facesDetected = [];
+    let showBoxesToggle = document.getElementById('show-boxes-toggle');
+    let videoStream = null;
+    let detectionLoop = null;
+    let recognitionTimer = null;
+    let modelsLoaded = false;
+    let modelStatus = document.getElementById('model-status');
+    let modelLoadProgress = document.getElementById('model-load-progress');
+    let startCameraBtn = document.getElementById('start-camera-btn');
+    let startCameraBtn2 = document.getElementById('start-camera-btn-2');
+    let stopCameraBtn = document.getElementById('stop-camera-btn');
+
+    // Function to check camera permissions and request if needed
+    async function checkCameraPermission() {
+        console.log('[checkCameraPermission] Function called');
+
+        try {
+            // Check if the browser supports permissions API
+            if (navigator.permissions && navigator.permissions.query) {
+                console.log('[checkCameraPermission] Permissions API is supported');
+
+                // Try to query the camera permission state
+                const permissionStatus = await navigator.permissions.query({ name: 'camera' });
+                console.log(`[checkCameraPermission] Camera permission state: ${permissionStatus.state}`);
+
+                // If permission is denied, show a custom message
+                if (permissionStatus.state === 'denied') {
+                    console.warn('[checkCameraPermission] Permission denied');
+                    showPermissionDialog();
+                    return false;
+                }
+            } else {
+                console.warn('[checkCameraPermission] Permissions API not supported');
+            }
+
+            // Try to access the camera to trigger the permission prompt if not already granted
+            console.log('[checkCameraPermission] Requesting camera access...');
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            console.log('[checkCameraPermission] Camera access granted');
+
+            // If we get here, permission was granted
+            // Stop the test stream immediately to free the camera
+            stream.getTracks().forEach(track => {
+                console.log('[checkCameraPermission] Stopping camera track');
+                track.stop();
+            });
+
+            return true;
+        } catch (error) {
+            console.error('[checkCameraPermission] Camera permission error:', error);
+            // If error occurs, show the permission dialog
+            showPermissionDialog();
+            return false;
+        }
+    }
+
+    // Function to show a custom permission dialog
+    function showPermissionDialog() {
+        console.log('[showPermissionDialog] Function called');
+
+        // Create modal if it doesn't exist
+        if (!document.getElementById('permissionModal')) {
+            console.log('[showPermissionDialog] Creating permission modal');
+
+            const modalHTML = `
+            <div class="modal fade" id="permissionModal" tabindex="-1" aria-labelledby="permissionModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header bg-warning">
+                            <h5 class="modal-title" id="permissionModalLabel">Camera Access Required</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="text-center mb-4">
+                                <i class="fas fa-camera-slash fa-4x text-warning mb-3"></i>
+                                <h5>Camera access is blocked</h5>
+                            </div>
+                            <p>To use face recognition, you need to allow camera access:</p>
+                            <ol>
+                                <li>Click the camera or lock icon in your browser's address bar</li>
+                                <li>Select "Allow" for camera access</li>
+                                <li>Refresh the page after changing permission</li>
+                            </ol>
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle"></i> Your camera will only be used for face recognition and is not recorded or stored.
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-primary" onclick="refreshPage()">Refresh Page</button>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+
+            // Append modal to body
+            const modalContainer = document.createElement('div');
+            modalContainer.innerHTML = modalHTML;
+            document.body.appendChild(modalContainer.firstChild);
+            console.log('[showPermissionDialog] Modal appended to DOM');
+        } else {
+            console.log('[showPermissionDialog] Modal already exists');
+        }
+
+        // Show the modal
+        const permissionModal = new bootstrap.Modal(document.getElementById('permissionModal'));
+        permissionModal.show();
+        console.log('[showPermissionDialog] Modal shown');
+    }
+
+
+    // Function to refresh the page
+    function refreshPage() {
+        window.location.reload();
+    }
+
+
+
+    // Function to properly clean up camera resources
+    function cleanupCameraResources() {
+        // Stop all video tracks
+        if (videoStream) {
+            try {
+                videoStream.getTracks().forEach(track => {
+                    if (track.readyState === 'live') {
+                        track.stop();
+                    }
+                });
+            } catch (e) {
+                console.error('Error stopping video tracks:', e);
+            }
+            videoStream = null;
+        }
+
+        // Clear video source
+        if (video && video.srcObject) {
+            video.srcObject = null;
+        }
+
+        // Cancel any pending animation frames
+        if (detectionLoop) {
+            cancelAnimationFrame(detectionLoop);
+            detectionLoop = null;
+        }
+
+        // Clear any timers
+        if (recognitionTimer) {
+            clearInterval(recognitionTimer);
+            recognitionTimer = null;
+        }
+
+        // Reset detection state
+        isDetecting = false;
+
+        // Notify server
+        try {
+            fetch('/stop_detection', {
+                method: 'GET',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+        } catch (e) {
+            console.error('Error notifying server about stopped detection:', e);
+        }
+    }
+
+    // Ensure modal is always hidden after operations
+    async function loadModels() {
+        if (modelsLoaded) {
+            return true; // Already loaded
+        }
+
+        try {
+            if (loadingModal) loadingModal.show();
+
+            await updateLoadingProgress('Loading face-api.js models...', 10);
+
+            // Specify model path
+            const MODEL_URL = '/static/models/face-api/';
+
+            // Load required models for face detection
+            await updateLoadingProgress('Loading face detection model...', 30);
+            await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
+
+            await updateLoadingProgress('Loading face landmark model...', 50);
+            await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+
+            await updateLoadingProgress('Loading face recognition model...', 70);
+            await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+
+            await updateLoadingProgress('Models loaded successfully!', 100);
+
+            faceDetectionReady = true;
+            modelsLoaded = true;
+
+            // Update model status in the UI
+            if (modelStatus) {
+                modelStatus.textContent = 'Face detection models: Ready';
+                modelStatus.classList.remove('text-muted');
+                modelStatus.classList.add('text-success');
+            }
+
+            if (modelLoadProgress) {
+                modelLoadProgress.style.width = '100%';
+                modelLoadProgress.classList.remove('progress-bar-animated', 'progress-bar-striped');
+            }
+
+            return true;
+        } catch (error) {
+            console.error('Error loading models:', error);
+            await updateLoadingProgress('Error loading models. Please refresh the page.', 100);
+
+            // Update model status in the UI
+            if (modelStatus) {
+                modelStatus.textContent = 'Error loading models. Please refresh the page.';
+                modelStatus.classList.remove('text-muted');
+                modelStatus.classList.add('text-danger');
+            }
+
+            return false;
+        } finally {
+            // Always hide the modal, whether successful or not
+            setTimeout(() => {
+                if (loadingModal) {
+                    try {
+                        loadingModal.hide();
+                        // Also try removing modal backdrop if it gets stuck
+                        const modalBackdrops = document.querySelectorAll('.modal-backdrop');
+                        modalBackdrops.forEach(backdrop => {
+                            backdrop.classList.remove('show');
+                            setTimeout(() => {
+                                backdrop.remove();
+                            }, 300);
+                        });
+
+                        // Fix for stuck body classes
+                        document.body.classList.remove('modal-open');
+                        document.body.style.overflow = '';
+                        document.body.style.paddingRight = '';
+                    } catch (e) {
+                        console.error('Error hiding modal:', e);
+                    }
+                }
+            }, 500);
+        }
+    }
+
+    async function updateLoadingProgress(message, percentage) {
+        const progressBar = document.getElementById('loading-progress');
+        const loadingMessage = document.getElementById('loading-message');
+
+        if (progressBar) progressBar.style.width = percentage + '%';
+        if (loadingMessage) loadingMessage.textContent = message;
+
+        // Also update the model load progress on the main page
+        if (modelLoadProgress) {
+            modelLoadProgress.style.width = percentage + '%';
+        }
+
+        if (modelStatus) {
+            modelStatus.textContent = 'Face detection models: ' + message;
+        }
+
+        // Small delay to show progress animation
+        return new Promise(resolve => setTimeout(resolve, 300));
+    }
+
+    // Add a fallback timer to force-close the modal if it gets stuck
+    function ensureModalClosed() {
+        // Force close modal after 10 seconds if it's still open
+        const forceCloseTimer = setTimeout(() => {
+            if (loadingModal) {
+                try {
+                    loadingModal.hide();
+                    // Clean up modal backdrop
+                    const modalBackdrops = document.querySelectorAll('.modal-backdrop');
+                    modalBackdrops.forEach(backdrop => {
+                        backdrop.classList.remove('show');
+                        backdrop.remove();
+                    });
+
+                    // Fix for stuck body classes
+                    document.body.classList.remove('modal-open');
+                    document.body.style.overflow = '';
+                    document.body.style.paddingRight = '';
+                } catch (e) {
+                    console.error('Error in force-closing modal:', e);
+                }
+            }
+        }, 10000);
+
+        return forceCloseTimer;
+    }
+
+    // Modified startCamera function with improved modal handling
+    async function startCamera() {
+        const hasPermission = await checkCameraPermission();
+        
+        if (!hasPermission) {
+            return; // Stop if permission not granted
+        }
+
+        const forceCloseTimer = ensureModalClosed();
+
+        
+        try {
+            // Check if getUserMedia is available
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                throw new Error('Camera access not supported in this browser');
+            }
+
+            // Get camera stream
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    width: { ideal: 640 },
+                    height: { ideal: 480 },
+                    facingMode: 'user'
+                }
+            });
+
+            // Save stream for cleanup later
+            videoStream = stream;
+
+            // Set up video
+            video.srcObject = stream;
+            await video.play();
+
+            // Set up canvas
+            displaySize.width = video.videoWidth;
+            displaySize.height = video.videoHeight;
+            faceCanvas.width = displaySize.width;
+            faceCanvas.height = displaySize.height;
+
+            if (statusBadge) {
+                statusBadge.textContent = 'Status: Running';
+                statusBadge.classList.remove('bg-secondary');
+                statusBadge.classList.add('bg-success');
+            }
+
+            // Show camera container and controls
+            if (cameraPlaceholder) cameraPlaceholder.style.display = 'none';
+            if (cameraContainer) {
+                cameraContainer.style.display = 'block';
+                cameraContainer.classList.remove('d-none');
+            }
+            if (detectionControls) {
+                detectionControls.classList.remove('d-none');
+            }
+
+            // Update button visibility
+            if (startCameraBtn) startCameraBtn.classList.add('d-none');
+            if (stopCameraBtn) stopCameraBtn.classList.remove('d-none');
+
+            // Start detection loop
+            isDetecting = true;
+            detectFaces();
+
+            // Start periodic recognition
+            startPeriodicRecognition();
+
+            // Tell the server we started detection
+            fetch('/start_detection', {
+                method: 'GET',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+
+            return true;
+        } catch (error) {
+            console.error('Error starting camera:', error);
+
+            // Update UI to reflect that detection is not running
+            if (statusBadge) {
+                statusBadge.textContent = 'Status: Error';
+                statusBadge.classList.remove('bg-secondary', 'bg-success');
+                statusBadge.classList.add('bg-danger');
+            }
+
+            throw error;
+        } finally {
+            // Always clear the force close timer
+            clearTimeout(forceCloseTimer);
+
+            // Always hide the modal
+            setTimeout(() => {
+                if (loadingModal) {
+                    try {
+                        loadingModal.hide();
+                        // Clean up modal backdrop
+                        const modalBackdrops = document.querySelectorAll('.modal-backdrop');
+                        modalBackdrops.forEach(backdrop => {
+                            backdrop.classList.remove('show');
+                            backdrop.remove();
+                        });
+
+                        // Fix for stuck body classes
+                        document.body.classList.remove('modal-open');
+                        document.body.style.overflow = '';
+                        document.body.style.paddingRight = '';
+                    } catch (e) {
+                        console.error('Error hiding modal:', e);
+                    }
+                }
+            }, 500);
+        }
+    }
+
+    function stopCamera() {
+        // Stop detection loop
+        isDetecting = false;
+
+        // Use the cleanup function
+        cleanupCameraResources();
+
+        // Update UI
+        if (statusBadge) {
+            statusBadge.textContent = 'Status: Stopped';
+            statusBadge.classList.remove('bg-success', 'bg-secondary');
+            statusBadge.classList.add('bg-secondary');
+        }
+
+        if (recognitionBadge) {
+            recognitionBadge.textContent = 'Recognition: Idle';
+            recognitionBadge.classList.remove('bg-success', 'bg-warning');
+            recognitionBadge.classList.add('bg-secondary');
+        }
+
+        // Show placeholder and hide controls
+        if (cameraPlaceholder) cameraPlaceholder.style.display = 'flex';
+        if (cameraContainer) {
+            cameraContainer.style.display = 'none';
+            cameraContainer.classList.add('d-none');
+        }
+        if (detectionControls) {
+            detectionControls.classList.add('d-none');
+        }
+
+        // Update button visibility
+        if (startCameraBtn) startCameraBtn.classList.remove('d-none');
+        if (stopCameraBtn) stopCameraBtn.classList.add('d-none');
+    }
+
+    async function detectFaces() {
+        if (!isDetecting || !video || !faceCanvas || !faceDetectionReady) return;
+
+        const context = faceCanvas.getContext('2d');
+
+        // Draw video on canvas
+        context.drawImage(video, 0, 0, displaySize.width, displaySize.height);
+
+        // Detect faces
+        try {
+            const detections = await faceapi.detectAllFaces(video).withFaceLandmarks();
+            facesDetected = detections;
+
+            // If show boxes is enabled
+            if (showBoxes) {
+                // Draw detections
+                detections.forEach(detection => {
+                    const box = detection.detection.box;
+
+                    // Draw rectangle
+                    context.beginPath();
+                    context.rect(box.x, box.y, box.width, box.height);
+                    context.lineWidth = 2;
+                    context.strokeStyle = 'yellow';
+                    context.fillStyle = 'rgba(255, 255, 0, 0.1)';
+                    context.stroke();
+                    context.fill();
+
+                    // Add label placeholder (will be filled by recognition)
+                    context.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                    context.fillRect(box.x, box.y + box.height - 20, box.width, 20);
+                    context.fillStyle = 'white';
+                    context.font = '12px Arial';
+                    context.fillText('Detecting...', box.x + 5, box.y + box.height - 5);
+                });
+            }
+
+            // Calculate FPS
+            frameCount++;
+            const now = Date.now();
+            const elapsed = now - lastFpsUpdateTime;
+
+            if (elapsed >= 1000) {
+                const fps = Math.round(frameCount * 1000 / elapsed);
+                if (fpsCounter) fpsCounter.textContent = `FPS: ${fps}`;
+                frameCount = 0;
+                lastFpsUpdateTime = now;
+            }
+
+            // Check if it's time for recognition
+            const currentTime = Date.now();
+            if (currentTime - lastRecognitionTime >= recognitionInterval && facesDetected.length > 0) {
+                performRecognition();
+                lastRecognitionTime = currentTime;
+            }
+
+        } catch (error) {
+            console.error('Error in face detection:', error);
+        }
+
+        // Continue detection loop if still detecting
+        if (isDetecting) {
+            detectionLoop = requestAnimationFrame(detectFaces);
+        }
+    }
+
+    async function performRecognition() {
+        if (facesDetected.length === 0) return;
+
+        // Update recognition status
+        if (recognitionBadge) {
+            recognitionBadge.textContent = 'Recognition: Processing';
+            recognitionBadge.classList.remove('bg-secondary', 'bg-success');
+            recognitionBadge.classList.add('bg-warning');
+        }
+
+        try {
+            // Capture current frame
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // Convert canvas to blob
+            const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg'));
+
+            // Create form data
+            const formData = new FormData();
+            formData.append('image', blob, 'capture.jpg');
+
+            // Send to server for recognition
+            const response = await fetch('/api/recognize_face', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                throw new Error('Server error: ' + response.statusText);
+            }
+
+            const result = await response.json();
+
+            // Update UI with recognition results
+            updateRecognitionResults(result);
+
+            // Refresh detection list
+            refreshData('recent_detections');
+
+        } catch (error) {
+            console.error('Error in face recognition:', error);
+            if (recognitionBadge) {
+                recognitionBadge.textContent = 'Recognition: Error';
+                recognitionBadge.classList.remove('bg-warning', 'bg-success');
+                recognitionBadge.classList.add('bg-danger');
+            }
+        }
+    }
+
+    function updateRecognitionResults(results) {
+        // Update recognition badge
+        if (recognitionBadge) {
+            recognitionBadge.textContent = 'Recognition: Completed';
+            recognitionBadge.classList.remove('bg-warning', 'bg-danger');
+            recognitionBadge.classList.add('bg-success');
+        }
+
+        // If we have detection results and show boxes is enabled
+        if (results.detections && results.detections.length > 0 && showBoxes) {
+            // Get canvas context for updating labels
+            const context = faceCanvas.getContext('2d');
+
+            // Update face labels with recognition results
+            results.detections.forEach((detection, i) => {
+                if (i < facesDetected.length) {
+                    const box = facesDetected[i].detection.box;
+
+                    // Clear previous label
+                    context.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                    context.fillRect(box.x, box.y + box.height - 20, box.width, 20);
+
+                    // Draw new label
+                    context.fillStyle = 'white';
+                    context.font = '12px Arial';
+
+                    // Set different colors based on recognition status
+                    let boxColor = 'yellow';
+
+                    if (detection.name !== 'Unknown') {
+                        if (detection.status === 'guest') {
+                            context.fillText(`Guest: ${detection.name}`, box.x + 5, box.y + box.height - 5);
+                            boxColor = 'orange';
+                        } else {
+                            context.fillText(detection.name, box.x + 5, box.y + box.height - 5);
+                            boxColor = 'lime';
+                        }
+
+                        // Update recognition badge with name
+                        if (recognitionBadge) {
+                            recognitionBadge.textContent = `Recognition: ${detection.name}`;
+                        }
+                    } else {
+                        context.fillText('Unknown', box.x + 5, box.y + box.height - 5);
+                        boxColor = 'red';
+                    }
+
+                    // Update box color
+                    context.beginPath();
+                    context.rect(box.x, box.y, box.width, box.height);
+                    context.lineWidth = 2;
+                    context.strokeStyle = boxColor;
+                    context.stroke();
+                }
+            });
+        }
+    }
+
+    // Function to start periodic recognition
+    function startPeriodicRecognition() {
+        // Initial recognition
+        if (facesDetected.length > 0) {
+            performRecognition();
+            lastRecognitionTime = Date.now();
+        }
+
+        // Set up timer for periodic recognition
+        recognitionTimer = setInterval(() => {
+            if (isDetecting && facesDetected.length > 0) {
+                performRecognition();
+            }
+        }, recognitionInterval);
+    }
+
+    // Ajax update functions
+    function refreshData(target) {
+        const button = document.querySelector(`.refresh-btn[data-target="${target}"]`);
+
+        // Add rotating animation
+        if (button) {
+            button.classList.add('rotating');
+        }
+
+        // Fetch data
+        fetch(`/api/get_${target}`)
+            .then(response => response.json())
+            .then(data => {
+                if (target === 'recent_detections') {
+                    updateDetections(data);
+                } else if (target === 'active_guests') {
+                    updateGuests(data);
+                }
+
+                // Remove rotating animation
+                if (button) {
+                    setTimeout(() => {
+                        button.classList.remove('rotating');
+                    }, 500);
+                }
+            })
+            .catch(error => {
+                console.error(`Error fetching ${target}:`, error);
+                if (button) {
+                    button.classList.remove('rotating');
+                }
+            });
+    }
+
+    function updateDetections(data) {
+        const tbody = document.getElementById('recent-detections-tbody');
+        if (!tbody) return;
+
+        // Update count
+        const countElement = document.getElementById('detection-count');
+        if (countElement) {
+            countElement.textContent = data.length;
+        }
+
+        // Clear current contents
+        tbody.innerHTML = '';
+
+        // Add new rows
+        if (data.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="4" class="text-center py-3">No recent detections</td>
+                </tr>
+            `;
+        } else {
+            data.forEach(detection => {
+                const statusClass =
+                    detection.status === 'recognized' ? 'bg-success' :
+                        detection.status === 'guest' ? 'bg-warning' : 'bg-danger';
+
+                const nameDisplay = detection.name ?
+                    `<i class="fas fa-user-circle text-primary me-2"></i> ${detection.name}` :
+                    '<i class="fas fa-question-circle text-danger me-2"></i> <span class="text-danger">Unknown</span>';
+
+                const row = document.createElement('tr');
+                row.className = 'highlight-new';
+
+                // Add action button for unknown detections
+                const actionButton = detection.status === 'unknown' ?
+                    `<a href="{{ url_for('alerts') }}" class="btn btn-sm btn-outline-secondary">
+                       <i class="fas fa-eye"></i> View
+                     </a>` : '';
+
+                row.innerHTML = `
+                    <td>${nameDisplay}</td>
+                    <td><span class="badge ${statusClass}">${detection.status.charAt(0).toUpperCase() + detection.status.slice(1)}</span></td>
+                    <td>${detection.formatted_time}</td>
+                 `;
+                tbody.appendChild(row);
+            });
+        }
+    }
+
+    function updateGuests(data) {
+        const tbody = document.getElementById('active-guests-tbody');
+        if (!tbody) return;
+
+        // Clear current contents
+        tbody.innerHTML = '';
+
+        // Add new rows
+        if (data.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="3" class="text-center py-3">No active guests</td>
+                </tr>
+            `;
+        } else {
+            data.forEach(guest => {
+                const row = document.createElement('tr');
+                row.className = 'highlight-new';
+                row.innerHTML = `
+                    <td>${guest.name}</td>
+                    <td>${guest.end_date}</td>
+                    <td>${guest.purpose || 'N/A'}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+    }
+
+    // Event listeners
+    if (showBoxesToggle) {
+        showBoxesToggle.addEventListener('change', function () {
+            showBoxes = this.checked;
+
+            // Toggle showing face boxes on server
+            fetch('/api/toggle_face_boxes', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({ show_boxes: showBoxes })
+            });
+        });
+    }
+
+    // Set up refresh buttons
+    const refreshButtons = document.querySelectorAll('.refresh-btn');
+    refreshButtons.forEach(button => {
+        button.addEventListener('click', function () {
+            const target = this.getAttribute('data-target');
+            refreshData(target.replace('-', '_'));
+        });
+    });
+
+    // Handle start camera buttons
+    if (startCameraBtn) {
+        startCameraBtn.addEventListener('click', async function (e) {
+            e.preventDefault();
+            handleStartCamera();
+        });
+    }
+
+    if (startCameraBtn2) {
+        startCameraBtn2.addEventListener('click', async function (e) {
+            e.preventDefault();
+            handleStartCamera();
+        });
+    }
+
+    // Handle stop camera button
+    if (stopCameraBtn) {
+        stopCameraBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            handleStopCamera();
+        });
+    }
+
+    async function handleStartCamera() {
+        try {
+            // Show loading modal
+            if (loadingModal) loadingModal.show();
+
+            // Load models if needed
+            if (!modelsLoaded) {
+                await loadModels();
+            }
+
+            // Start camera
+            await startCamera();
+
+        } catch (error) {
+            console.error('Error starting camera:', error);
+            alert('Error starting camera: ' + error.message);
+        } finally {
+            // Hide loading modal
+            setTimeout(() => {
+                if (loadingModal) {
+                    try {
+                        loadingModal.hide();
+                        // Clean up modal backdrop
+                        document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
+                            backdrop.classList.remove('show');
+                            backdrop.remove();
+                        });
+
+                        // Fix for stuck body classes
+                        document.body.classList.remove('modal-open');
+                        document.body.style.overflow = '';
+                        document.body.style.paddingRight = '';
+                    } catch (e) {
+                        console.error('Error hiding modal:', e);
+                    }
+                }
+            }, 500);
+        }
+    }
+
+    function handleStopCamera() {
+        stopCamera();
+    }
+
+    // Add both event listeners for cleaning up camera when navigating away
+    window.addEventListener('beforeunload', cleanupCameraResources);
+    window.addEventListener('unload', cleanupCameraResources);
+
+    // Also add listener for visibility change (when user switches tabs)
+    document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'hidden' && isDetecting) {
+            cleanupCameraResources();
+        }
+    });
+
+    // Start model preloading in the background
+    setTimeout(() => {
+        // Add animation class to progress bar
+        if (modelLoadProgress) {
+            modelLoadProgress.classList.add('loading');
+        }
+
+        // Preload models
+        loadModels().then(() => {
+            console.log('Models preloaded and ready');
+        });
+    }, 1000);
+
+    // Set up periodic data refresh
+    setInterval(() => {
+        refreshData('recent_detections');
+        refreshData('active_guests');
+    }, 1000); // Every 30 seconds
+
+
+    checkCameraPermission();
+
+});
+</script>
+{% endblock %}

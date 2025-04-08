@@ -1,0 +1,354 @@
+{% extends "layout.html" %}
+
+{% block title %}Add Face Images{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-camera"></i> Add Face Images for {{ person.name }}</h2>
+    <a href="{{ url_for('users') }}" class="btn btn-secondary">
+        <i class="fas fa-arrow-left"></i> Back to Users
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Upload Face Images</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> Upload multiple clear face images from different angles for better recognition.
+                    <strong>Recommended: {{ min_face_images }} images per person.</strong>
+                </div>
+                
+                <form action="{{ url_for('add_face', person_id=person.id) }}" method="post" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="face_images" class="form-label">Select Images</label>
+                        <input type="file" class="form-control" id="face_images" name="face_images" accept="image/jpeg, image/png" multiple required>
+                        <small class="form-text text-muted">Select multiple files by holding Ctrl/Cmd key while selecting.</small>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-upload"></i> Upload Images
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="card shadow-sm">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Capture from Camera</h5>
+                <div>
+                    <span class="badge bg-light text-dark" id="face-counter">
+                        Images: <span id="capture-count">0</span>
+                    </span>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="camera-container mb-3">
+                    <video id="camera-feed" class="w-100 bg-dark rounded" style="display: none;"></video>
+                    <canvas id="snapshot-canvas" class="w-100 bg-dark rounded" style="display: none;"></canvas>
+                    <div id="camera-placeholder" class="w-100 bg-light text-center py-5 rounded">
+                        <i class="fas fa-camera fa-3x mb-3 text-muted"></i>
+                        <p>Camera feed will appear here</p>
+                    </div>
+                </div>
+                
+                <div class="d-grid gap-2">
+                    <button id="start-camera" class="btn btn-primary">
+                        <i class="fas fa-video"></i> Start Camera
+                    </button>
+                    <button id="capture-photo" class="btn btn-success" style="display: none;">
+                        <i class="fas fa-camera"></i> Capture Photo
+                    </button>
+                    <button id="retake-photo" class="btn btn-warning" style="display: none;">
+                        <i class="fas fa-redo"></i> Retake
+                    </button>
+                    <button id="save-photo" class="btn btn-primary" style="display: none;">
+                        <i class="fas fa-save"></i> Save Photo
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card shadow-sm">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Existing Face Images</h5>
+                <div>
+                    <form action="{{ url_for('add_face', person_id=person.id) }}" method="post" id="train-form">
+                        <input type="hidden" name="train_model" value="1">
+                        <button type="submit" class="btn btn-warning btn-sm" {% if is_training %}disabled{% endif %}>
+                            {% if is_training %}
+                                <i class="fas fa-cog fa-spin"></i> Training...
+                            {% else %}
+                                <i class="fas fa-brain"></i> Train Model
+                            {% endif %}
+                        </button>
+                    </form>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row" id="face-images-container">
+                    {% if faces|length == 0 %}
+                        <div class="col-12 text-center py-4" id="no-faces-message">
+                            <i class="fas fa-image fa-3x text-muted mb-3"></i>
+                            <p>No face images added yet</p>
+                        </div>
+                    {% else %}
+                        {% for face in faces %}
+                            <div class="col-6 col-md-4 mb-3">
+                                <div class="card face-image-card">
+                                    <img src="{{ url_for('static', filename=face.file_path.replace('static/', '')) }}" 
+                                         class="card-img-top" alt="{{ person.name }}">
+                                    <div class="card-footer p-1 text-center">
+                                        <small class="text-muted">Image {{ loop.index }}</small>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card-footer">
+                <div class="d-flex justify-content-between align-items-center">
+                    <p class="mb-0">
+                        <i class="fas fa-info-circle"></i> Total faces: <span class="badge bg-primary" id="total-face-count">{{ faces|length }}</span>
+                    </p>
+                    <div>
+                        <div class="progress" style="width: 150px;">
+                            <div class="progress-bar {% if faces|length >= min_face_images %}bg-success{% else %}bg-warning{% endif %}" 
+                                 role="progressbar" 
+                                 style="width: {{ (faces|length / min_face_images * 100) if faces|length < min_face_images else 100 }}%" 
+                                 aria-valuenow="{{ faces|length }}" 
+                                 aria-valuemin="0" 
+                                 aria-valuemax="{{ min_face_images }}">
+                                {{ faces|length }}/{{ min_face_images }}
+                            </div>
+                        </div>
+                        <small class="text-muted">Min required: {{ min_face_images }}</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Camera functionality
+    document.addEventListener('DOMContentLoaded', function() {
+        const cameraFeed = document.getElementById('camera-feed');
+        const snapshotCanvas = document.getElementById('snapshot-canvas');
+        const cameraPlaceholder = document.getElementById('camera-placeholder');
+        const startCameraBtn = document.getElementById('start-camera');
+        const capturePhotoBtn = document.getElementById('capture-photo');
+        const retakePhotoBtn = document.getElementById('retake-photo');
+        const savePhotoBtn = document.getElementById('save-photo');
+        const captureCount = document.getElementById('capture-count');
+        const totalFaceCount = document.getElementById('total-face-count');
+        const noFacesMessage = document.getElementById('no-faces-message');
+        const faceImagesContainer = document.getElementById('face-images-container');
+        
+        let stream;
+        let isCaptured = false;
+        let currentCaptureCount = parseInt(totalFaceCount.textContent);
+        
+        captureCount.textContent = currentCaptureCount;
+        
+        // Start camera feed
+        startCameraBtn.addEventListener('click', async function() {
+            try {
+                // Request camera access directly from browser
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
+                        facingMode: "user" 
+                    } 
+                });
+                
+                // Set video source and play
+                cameraFeed.srcObject = stream;
+                cameraFeed.play();
+                
+                // Update UI
+                cameraFeed.style.display = 'block';
+                cameraPlaceholder.style.display = 'none';
+                startCameraBtn.style.display = 'none';
+                capturePhotoBtn.style.display = 'block';
+            } catch (err) {
+                console.error('Error accessing camera:', err);
+                const alertDiv = document.createElement('div');
+                alertDiv.className = 'alert alert-danger alert-dismissible fade show mt-3';
+                alertDiv.innerHTML = `
+                    <i class="fas fa-exclamation-circle"></i> Error accessing camera: ${err.message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                `;
+                document.querySelector('.camera-container').after(alertDiv);
+            }
+        });
+        
+        // Capture photo
+        capturePhotoBtn.addEventListener('click', function() {
+            if (!stream) return;
+            
+            const context = snapshotCanvas.getContext('2d');
+            
+            // Set canvas dimensions to match video
+            snapshotCanvas.width = cameraFeed.videoWidth;
+            snapshotCanvas.height = cameraFeed.videoHeight;
+            
+            // Draw video frame to canvas
+            context.drawImage(cameraFeed, 0, 0, snapshotCanvas.width, snapshotCanvas.height);
+            
+            // Update UI
+            cameraFeed.style.display = 'none';
+            snapshotCanvas.style.display = 'block';
+            capturePhotoBtn.style.display = 'none';
+            retakePhotoBtn.style.display = 'block';
+            savePhotoBtn.style.display = 'block';
+            
+            isCaptured = true;
+        });
+        
+        // Retake photo
+        retakePhotoBtn.addEventListener('click', function() {
+            // Update UI
+            cameraFeed.style.display = 'block';
+            snapshotCanvas.style.display = 'none';
+            capturePhotoBtn.style.display = 'block';
+            retakePhotoBtn.style.display = 'none';
+            savePhotoBtn.style.display = 'none';
+            
+            isCaptured = false;
+        });
+        
+        // Save photo
+        savePhotoBtn.addEventListener('click', function() {
+            if (!isCaptured) return;
+            
+            // Show loading indicator
+            savePhotoBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+            savePhotoBtn.disabled = true;
+            
+            // Convert canvas to base64 image data
+            const imageData = snapshotCanvas.toDataURL('image/jpeg');
+            
+            // Send to server
+            fetch('{{ url_for("capture_face", person_id=person.id) }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ image_data: imageData }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Increment capture count
+                    currentCaptureCount++;
+                    captureCount.textContent = currentCaptureCount;
+                    totalFaceCount.textContent = data.face_count;
+                    
+                    // Update progress bar
+                    const progressBar = document.querySelector('.progress-bar');
+                    const progressPercent = Math.min(100, (data.face_count / data.min_required) * 100);
+                    progressBar.style.width = progressPercent + '%';
+                    progressBar.textContent = data.face_count + '/' + data.min_required;
+                    
+                    // Change progress bar color if min requirement met
+                    if (data.face_count >= data.min_required) {
+                        progressBar.classList.remove('bg-warning');
+                        progressBar.classList.add('bg-success');
+                    }
+                    
+                    // Display success message
+                    const alertDiv = document.createElement('div');
+                    alertDiv.className = 'alert alert-success alert-dismissible fade show mt-3';
+                    alertDiv.innerHTML = `
+                        <i class="fas fa-check-circle"></i> Face captured successfully!
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    `;
+                    document.querySelector('.camera-container').after(alertDiv);
+                    
+                    // Auto dismiss alert after 3 seconds
+                    setTimeout(() => {
+                        alertDiv.classList.remove('show');
+                        setTimeout(() => alertDiv.remove(), 150);
+                    }, 3000);
+                    
+                    // Add image to grid
+                    if (noFacesMessage && data.face_count > 0) {
+                        noFacesMessage.style.display = 'none';
+                    }
+                    
+                    const newImageDiv = document.createElement('div');
+                    newImageDiv.className = 'col-6 col-md-4 mb-3';
+                    newImageDiv.innerHTML = `
+                        <div class="card face-image-card">
+                            <img src="${data.file_path}" class="card-img-top" alt="{{ person.name }}">
+                            <div class="card-footer p-1 text-center">
+                                <small class="text-muted">Image ${data.face_count}</small>
+                            </div>
+                        </div>
+                    `;
+                    faceImagesContainer.appendChild(newImageDiv);
+                    
+                    // Retake for next capture
+                    retakePhotoBtn.click();
+                    
+                    // Check if training should be enabled
+                    if (data.face_count >= data.min_required) {
+                        const trainButton = document.querySelector('#train-form button');
+                        if (trainButton && trainButton.disabled && !trainButton.innerHTML.includes('Training')) {
+                            trainButton.disabled = false;
+                        }
+                    }
+                } else {
+                    // Display error message
+                    const alertDiv = document.createElement('div');
+                    alertDiv.className = 'alert alert-danger alert-dismissible fade show mt-3';
+                    alertDiv.innerHTML = `
+                        <i class="fas fa-exclamation-circle"></i> Error: ${data.message}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    `;
+                    document.querySelector('.camera-container').after(alertDiv);
+                }
+                
+                // Reset save button
+                savePhotoBtn.innerHTML = '<i class="fas fa-save"></i> Save Photo';
+                savePhotoBtn.disabled = false;
+            })
+            .catch(error => {
+                console.error('Error saving image:', error);
+                
+                // Display error message
+                const alertDiv = document.createElement('div');
+                alertDiv.className = 'alert alert-danger alert-dismissible fade show mt-3';
+                alertDiv.innerHTML = `
+                    <i class="fas fa-exclamation-circle"></i> Error saving image: ${error}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                `;
+                document.querySelector('.camera-container').after(alertDiv);
+                
+                // Reset save button
+                savePhotoBtn.innerHTML = '<i class="fas fa-save"></i> Save Photo';
+                savePhotoBtn.disabled = false;
+            });
+        });
+        
+        // Clean up on page unload
+        window.addEventListener('beforeunload', function() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+        });
+    });
+</script>
+{% endblock %}

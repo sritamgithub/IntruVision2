@@ -1,0 +1,152 @@
+{% extends "layout.html" %}
+
+{% block title %}Settings{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-cog"></i> System Settings</h2>
+</div>
+
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="card shadow-sm">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Configuration</h5>
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('settings') }}" method="post">
+                    <div class="mb-4">
+                        <h5><i class="fas fa-bell"></i> Alert Settings</h5>
+                        <hr>
+                        
+                        <div class="mb-3">
+                            <label for="email_recipient" class="form-label">Email Recipient</label>
+                            <input type="email" class="form-control" id="email_recipient" name="email_recipient"
+                                   value="{{ settings.email_recipient }}" placeholder="Enter email address for alerts">
+                            <small class="form-text text-muted">Alerts will be sent to this email address.</small>
+                        </div>
+                        
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="alert_for_unknown" name="alert_for_unknown"
+                                  {% if settings.alert_for_unknown == 'true' %}checked{% endif %}>
+                            <label class="form-check-label" for="alert_for_unknown">
+                                Send alerts for unknown faces
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <h5><i class="fas fa-camera"></i> Camera Settings</h5>
+                        <hr>
+                        
+                        <div class="mb-3">
+                            <label for="camera_source" class="form-label">Camera Source</label>
+                            <input type="number" class="form-control" id="camera_source" name="camera_source" 
+                                   value="{{ settings.camera_source or 0 }}" min="0">
+                            <small class="form-text text-muted">Use 0 for default webcam, 1 for external camera, etc.</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="detection_interval" class="form-label">Detection Interval (ms)</label>
+                            <input type="number" class="form-control" id="detection_interval" name="detection_interval" 
+                                   value="{{ settings.detection_interval or 2000 }}" min="500" step="100">
+                            <small class="form-text text-muted">Interval between face detections in milliseconds (lower values increase CPU usage).</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="detection_interval_seconds" class="form-label">Detection Logging Interval (seconds)</label>
+                            <input type="number" class="form-control" id="detection_interval_seconds" name="detection_interval_seconds" 
+                                   value="{{ settings.detection_interval_seconds or 5 }}" min="1" max="60">
+                            <small class="form-text text-muted">How often to log the same person's detection (to prevent duplicate logs).</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="frames_per_detection" class="form-label">Frames Per Detection</label>
+                            <input type="number" class="form-control" id="frames_per_detection" name="frames_per_detection" 
+                                   value="{{ settings.frames_per_detection or 10 }}" min="1" max="30">
+                            <small class="form-text text-muted">Number of frames to analyze for each detection (higher values improve accuracy but increase processing time).</small>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <h5><i class="fas fa-user-plus"></i> User Registration Settings</h5>
+                        <hr>
+                        
+                        <div class="mb-3">
+                            <label for="min_face_images" class="form-label">Minimum Face Images</label>
+                            <input type="number" class="form-control" id="min_face_images" name="min_face_images" 
+                                   value="{{ settings.min_face_images or 5 }}" min="1" max="20">
+                            <small class="form-text text-muted">Minimum number of face images required for each user (recommended: 5-10).</small>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <h5><i class="fas fa-sliders-h"></i> Recognition Settings</h5>
+                        <hr>
+                        
+                        <div class="mb-3">
+                            <label for="min_detection_confidence" class="form-label">Recognition Tolerance</label>
+                            <input type="range" class="form-range" id="min_detection_confidence" name="min_detection_confidence" 
+                                   min="0.1" max="1.0" step="0.05" value="{{ settings.min_detection_confidence or 0.5 }}">
+                            <div class="d-flex justify-content-between">
+                                <small>Strict (0.1)</small>
+                                <small id="tolerance-value">{{ settings.min_detection_confidence or 0.5 }}</small>
+                                <small>Permissive (1.0)</small>
+                            </div>
+                            <small class="form-text text-muted">Lower values require closer matches (fewer false positives, more false negatives).</small>
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Save Settings
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="card shadow-sm mt-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-lock"></i> Security Settings</h5>
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('change_admin_password') }}" method="post">
+                    <div class="mb-3">
+                        <label for="current_password" class="form-label">Current Password</label>
+                        <input type="password" class="form-control" id="current_password" name="current_password" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="new_password" class="form-label">New Password</label>
+                        <input type="password" class="form-control" id="new_password" name="new_password" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="confirm_password" class="form-label">Confirm New Password</label>
+                        <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-danger">
+                            <i class="fas fa-key"></i> Change Password
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Update tolerance value display
+    const toleranceSlider = document.getElementById('min_detection_confidence');
+    const toleranceValue = document.getElementById('tolerance-value');
+    
+    toleranceSlider.addEventListener('input', function() {
+        toleranceValue.textContent = this.value;
+    });
+</script>
+{% endblock %}

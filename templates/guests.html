@@ -1,0 +1,233 @@
+{% extends "layout.html" %}
+
+{% block title %}Guest Management{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-user-clock"></i> Guest Management</h2>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addGuestModal">
+        <i class="fas fa-plus"></i> Add New Guest
+    </button>
+</div>
+
+<!-- Add Guest Modal -->
+<div class="modal fade" id="addGuestModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">Add New Guest</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('add_guest') }}" method="post">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="person_id" class="form-label">Select Person*</label>
+                        <select class="form-select" id="person_id" name="person_id" required>
+                            <option value="">Select a registered person</option>
+                            {% for person in persons %}
+                                <option value="{{ person.id }}">{{ person.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <small class="form-text text-muted">Person must be registered with face images.</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="start_date" class="form-label">Start Date*</label>
+                        <input type="date" class="form-control" id="start_date" name="start_date" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="end_date" class="form-label">End Date*</label>
+                        <input type="date" class="form-control" id="end_date" name="end_date" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="purpose" class="form-label">Purpose</label>
+                        <textarea class="form-control" id="purpose" name="purpose" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Guest</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Calendar View -->
+<div class="card shadow-sm mb-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="fas fa-calendar-alt"></i> Guest Calendar</h5>
+    </div>
+    <div class="card-body">
+        <div id="calendar"></div>
+    </div>
+</div>
+
+<!-- Guest List -->
+<div class="card shadow-sm">
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="fas fa-list"></i> Guest List</h5>
+        <div>
+            <button class="btn btn-sm btn-light" id="show-active-only">Active Only</button>
+            <button class="btn btn-sm btn-outline-light" id="show-all">All Guests</button>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-striped mb-0">
+                <thead>
+                    <tr>
+                        <th>Guest</th>
+                        <th>Start Date</th>
+                        <th>End Date</th>
+                        <th>Purpose</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for guest in guests %}
+                        {% set is_active = (guest.start_date <= now.strftime('%Y-%m-%d') and guest.end_date >= now.strftime('%Y-%m-%d')) %}
+                        <tr class="guest-row {% if is_active %}active-guest{% endif %}">
+                            <td>{{ guest.name }}</td>
+                            <td>{{ guest.start_date }}</td>
+                            <td>{{ guest.end_date }}</td>
+                            <td>{{ guest.purpose or 'N/A' }}</td>
+                            <td>
+                                {% if is_active %}
+                                    <span class="badge bg-success">Active</span>
+                                {% else %}
+                                    {% if guest.start_date > now.strftime('%Y-%m-%d') %}
+                                        <span class="badge bg-info">Upcoming</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Expired</span>
+                                    {% endif %}
+                                {% endif %}
+                            </td>
+                            <td>
+                                <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#deleteGuestModal{{ guest.id }}">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                                
+                                <!-- Delete Modal -->
+                                <div class="modal fade" id="deleteGuestModal{{ guest.id }}" tabindex="-1" aria-hidden="true">
+                                    <div class="modal-dialog">
+                                        <div class="modal-content">
+                                            <div class="modal-header">
+                                                <h5 class="modal-title">Confirm Deletion</h5>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                Are you sure you want to delete guest access for <strong>{{ guest.name }}</strong>?
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                <form action="{{ url_for('delete_guest', guest_id=guest.id) }}" method="post">
+                                                    <button type="submit" class="btn btn-danger">Delete</button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center py-3">No guests registered yet</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.10.1/main.min.css" rel="stylesheet">
+<style>
+    #calendar {
+        height: 400px;
+    }
+    .fc-event {
+        cursor: pointer;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.10.1/main.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize calendar
+        const calendarEl = document.getElementById('calendar');
+        const calendar = new FullCalendar.Calendar(calendarEl, {
+            initialView: 'dayGridMonth',
+            headerToolbar: {
+                left: 'prev,next today',
+                center: 'title',
+                right: 'dayGridMonth,timeGridWeek,listWeek'
+            },
+            events: [
+                {% for guest in guests %}
+                {
+                    title: '{{ guest.name }}',
+                    start: '{{ guest.start_date }}',
+                    end: '{{ guest.end_date }}',
+                    allDay: true,
+                    backgroundColor: '{{ 'green' if (guest.start_date <= now.strftime('%Y-%m-%d') and guest.end_date >= now.strftime('%Y-%m-%d')) else 'blue' }}',
+                    extendedProps: {
+                        purpose: '{{ guest.purpose or "N/A" }}'
+                    }
+                }{% if not loop.last %},{% endif %}
+                {% endfor %}
+            ],
+            eventClick: function(info) {
+                alert(`Guest: ${info.event.title}\nDates: ${info.event.start.toLocaleDateString()} to ${info.event.end.toLocaleDateString()}\nPurpose: ${info.event.extendedProps.purpose}`);
+            }
+        });
+        calendar.render();
+        
+        // Filter buttons
+        document.getElementById('show-active-only').addEventListener('click', function() {
+            this.classList.remove('btn-outline-light');
+            this.classList.add('btn-light');
+            
+            document.getElementById('show-all').classList.remove('btn-light');
+            document.getElementById('show-all').classList.add('btn-outline-light');
+            
+            const rows = document.querySelectorAll('.guest-row');
+            rows.forEach(row => {
+                if (row.classList.contains('active-guest')) {
+                    row.style.display = 'table-row';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        });
+        
+        document.getElementById('show-all').addEventListener('click', function() {
+            this.classList.remove('btn-outline-light');
+            this.classList.add('btn-light');
+            
+            document.getElementById('show-active-only').classList.remove('btn-light');
+            document.getElementById('show-active-only').classList.add('btn-outline-light');
+            
+            const rows = document.querySelectorAll('.guest-row');
+            rows.forEach(row => {
+                row.style.display = 'table-row';
+            });
+        });
+        
+        // Set start date to today by default
+        document.getElementById('start_date').valueAsDate = new Date();
+        
+        // Set end date to today + 7 days by default
+        const endDate = new Date();
+        endDate.setDate(endDate.getDate() + 7);
+        document.getElementById('end_date').valueAsDate = endDate;
+    });
+</script>
+{% endblock %}
